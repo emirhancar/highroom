@@ -69,6 +69,7 @@ h1,h2,h3{font-family:var(--display);margin:0;letter-spacing:-.01em}
 .btn.acc{background:var(--acc);color:#fff}
 .btn.green{background:var(--green);color:#fff}
 .btn.ghost{background:var(--chip)}
+.btn.wa{background:#1fa855;color:#fff;text-decoration:none}
 .btn.danger{background:var(--red-soft);color:var(--red)}
 .btn.block{display:flex;width:100%}
 .btn:disabled{opacity:.5}
@@ -163,6 +164,12 @@ const norm=s=>String(s||'').trim().toLocaleLowerCase('tr');
 const kAdi=s=>norm(s).split(/\s+/)[0].replace(/[çğıöşü]/g,c=>({ç:'c',ğ:'g',ı:'i',ö:'o',ş:'s',ü:'u'}[c])).replace(/[^a-z0-9._-]/g,'');
 const mailYap=s=>{s=norm(s);return s.includes('@')?s:kAdi(s)+'@'+ALAN};
 const gorunur=m=>String(m||'').replace('@'+ALAN,'');
+const telNorm=t=>{let d=String(t||'').replace(/\D/g,'');if(d.startsWith('0'))d='9'+d;else if(d.length===10&&d.startsWith('5'))d='90'+d;return d.length>=11?d:''};
+const telGoster=t=>{const d=telNorm(t);return d?'+'+d.slice(0,2)+' '+d.slice(2,5)+' '+d.slice(5,8)+' '+d.slice(8,10)+' '+d.slice(10):''};
+const waLink=g=>{const k=D.kullanicilar[g.atanan]||{};const n=telNorm(k.tel);if(!n)return'';
+  const ad=(k.ad||'').split(' ')[0];
+  const m=`Merhaba ${ad} 👋 Senin için yeni bir iş var:\n\n📌 *${g.baslik}*`+(g.musteri?`\n🏷️ Müşteri: ${g.musteri}`:'')+`\n📅 Teslim: ${tarih(g.sonTarih)}`+(g.oncelik==='yuksek'?'\n⚡ Bu biraz acil, önceliğe alabilirsen çok iyi olur.':'')+`\n\nDetaylar uygulamada: ${location.origin+location.pathname}\nKolay gelsin! 🙏`;
+  return 'https://wa.me/'+n+'?text='+encodeURIComponent(m)};
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const DURUM={yapilacak:'Yapılacak',yapiliyor:'Yapılıyor',onay:'Onay bekliyor',bitti:'Bitti'};
 const DSIRA=['yapilacak','yapiliyor','onay','bitti'];
@@ -205,7 +212,7 @@ function dinle(){
   mode='hazir';
   const M={includeMetadataChanges:false};
   const q=admin?fs.collection('gorevler'):fs.collection('gorevler').where('atanan','==',me.uid);
-  unsub.push(q.onSnapshot(M,s=>{const m={};s.docs.forEach(d=>m[d.id]={...d.data(),id:d.id});D.gorevler=m;render()},e=>{toast('Görevler alınamadı: '+(e.code||''));}));
+  unsub.push(q.onSnapshot(M,s=>{const m={};s.docs.forEach(d=>m[d.id]={...d.data(),id:d.id});D.gorevler=m;render()},e=>{toast('İşler alınamadı: '+(e.code||''));}));
   if(admin)unsub.push(fs.collection('kullanicilar').onSnapshot(M,s=>{const m={};s.docs.forEach(d=>m[d.id]={...d.data(),id:d.id});D.kullanicilar=m;if(m[me.uid])profil=m[me.uid];render()},e=>{}));
   else unsub.push(fs.collection('kullanicilar').doc(me.uid).onSnapshot(s=>{if(s.exists){profil=s.data();if(profil.aktif===false){mode='yetkisiz'}render()}}));
   render();
@@ -253,12 +260,12 @@ function vGorevler(){
   const kisiChips=admin?`<div class="chips"><button class="chip ${S.kisi==='hepsi'?'on':''}" data-act="kisi" data-v="hepsi">Herkes</button><button class="chip ${S.kisi==='ben'?'on':''}" data-act="kisi" data-v="ben">Bana atanan</button>${ekip().filter(k=>k.id!==me.uid).map(k=>`<button class="chip ${S.kisi===k.id?'on':''}" data-act="kisi" data-v="${k.id}">${esc(k.ad)}</button>`).join('')}</div>`:'';
   const dChips=`<div class="chips" style="margin-top:6px">${[['acik','Açık'],['yapilacak','Yapılacak'],['yapiliyor','Yapılıyor'],['onay','Onay bekliyor'],['bitti','Bitti'],['hepsi','Hepsi']].map(([k,v])=>`<button class="chip ${S.durum===k?'on':''}" data-act="durumF" data-v="${k}">${v}</button>`).join('')}</div>`;
   let liste;
-  if(!all.length)liste=`<div class="empty"><b>${S.durum==='acik'?'Açık iş yok':'Bu filtrede iş yok'}</b>${admin?'Alttaki mor + düğmesiyle yeni görev açın.':'Size yeni görev atanınca burada görünür.'}</div>`;
+  if(!all.length)liste=`<div class="empty"><b>${S.durum==='acik'?'Açık iş yok':'Bu filtrede iş yok'}</b>${admin?'Alttaki mor + düğmesiyle yeni iş açın.':'Size yeni iş atanınca burada görünür.'}</div>`;
   else if(!admin&&S.durum==='acik'){
     const grp=[['Gecikmiş',all.filter(gecikti)],['Bugün',all.filter(g=>!gecikti(g)&&g.sonTarih===today())],['Yaklaşan',all.filter(g=>!gecikti(g)&&g.sonTarih!==today())]].filter(x=>x[1].length);
     liste=grp.map(([b,l])=>`<div class="sec"><h2>${b}</h2><small>${l.length}</small></div><div class="list">${l.map(taskRow).join('')}</div>`).join('');
   }else liste=`<div class="list" style="margin-top:12px">${all.map(taskRow).join('')}</div>`;
-  return header()+tiles+kisiChips+dChips+`<input class="search" id="ara" placeholder="Müşteri ya da görev ara" value="${esc(S.ara)}" autocomplete="off">`+liste;
+  return header()+tiles+kisiChips+dChips+`<input class="search" id="ara" placeholder="Müşteri ya da iş ara" value="${esc(S.ara)}" autocomplete="off">`+liste;
 }
 function vEkip(){
   const g=gorevler();
@@ -273,7 +280,7 @@ function nav(){
   const ic={g:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1.2 1.2L7 5M3.5 12l1.2 1.2L7 11M3.5 18l1.2 1.2L7 17"/></svg>',
     e:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M17 14.5c2.3 0 4 1.5 4.5 4"/></svg>',
     p:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>'};
-  n.innerHTML=`<div class="in"><button class="${S.tab==='gorevler'?'on':''}" data-act="tab" data-v="gorevler">${ic.g}Görevler</button>${admin?`<button class="plus" data-act="yeniGorev" aria-label="Yeni görev">${ic.p}</button><button class="${S.tab==='ekip'?'on':''}" data-act="tab" data-v="ekip">${ic.e}Ekip</button>`:''}</div>`;
+  n.innerHTML=`<div class="in"><button class="${S.tab==='gorevler'?'on':''}" data-act="tab" data-v="gorevler">${ic.g}İşler</button>${admin?`<button class="plus" data-act="yeniGorev" aria-label="Yeni iş">${ic.p}</button><button class="${S.tab==='ekip'?'on':''}" data-act="tab" data-v="ekip">${ic.e}Ekip</button>`:''}</div>`;
 }
 function render(){
   const a=$('#app');const fid=document.activeElement&&document.activeElement.id;const cur=fid?document.activeElement.selectionStart:null;
@@ -296,29 +303,38 @@ const musteriler=()=>[...new Set(gorevler().map(g=>(g.musteri||'').trim()).filte
 function sheetHTML(){
   if(SH==='gorev'){
     const t=today();const kisiler=ekip();
-    return head(F.id?'Görevi düzenle':'Yeni görev')+`<datalist id="mlist">${musteriler().map(m=>`<option value="${esc(m)}">`).join('')}</datalist>
-    <div class="fld"><label class="lab" for="f-baslik">Görev</label><input class="inp" id="f-baslik" data-f="baslik" placeholder="Örn: Kasım reklam kampanyası kurulumu" value="${esc(F.baslik)}"></div>
+    return head(F.id?'İşi düzenle':'Yeni iş')+`<datalist id="mlist">${musteriler().map(m=>`<option value="${esc(m)}">`).join('')}</datalist>
+    <div class="fld"><label class="lab" for="f-baslik">İş</label><input class="inp" id="f-baslik" data-f="baslik" placeholder="Örn: Kasım reklam kampanyası kurulumu" value="${esc(F.baslik)}"></div>
     <div class="fld"><label class="lab" for="f-musteri">Müşteri</label><input class="inp" id="f-musteri" data-f="musteri" list="mlist" placeholder="Müşteri adı" value="${esc(F.musteri)}" autocomplete="off"></div>
     <div class="fld"><div class="lab">Kime</div><div class="chips" style="flex-wrap:wrap">${kisiler.map(k=>`<button class="chip ${F.atanan===k.id?'on':''}" data-act="f" data-k="atanan" data-v="${k.id}">${esc(k.ad)}${k.id===me.uid?' (ben)':''}<span class="muted" style="font-weight:500"> · ${esc(k.rol==='admin'?'Yönetici':k.ekip)}</span></button>`).join('')}</div>${kisiler.length<2?'<div class="note">Ekip sekmesinden çalışan ekleyin.</div>':''}</div>
     <div class="fld"><div class="lab">Son tarih</div><div class="chips" style="flex-wrap:wrap">${[[t,'Bugün'],[addDays(t,1),'Yarın'],[addDays(t,3),'3 gün'],[addDays(t,7),'1 hafta']].map(([k,v])=>`<button class="chip ${F.sonTarih===k?'on':''}" data-act="f" data-k="sonTarih" data-v="${k}">${v}</button>`).join('')}<input class="inp" type="date" id="f-tarih" data-f="sonTarih" data-rr="1" value="${esc(F.sonTarih)}" style="width:auto;padding:6px 10px"></div></div>
     <div class="fld"><div class="lab">Öncelik</div><div class="chips">${Object.entries(ONC).map(([k,v])=>`<button class="chip ${F.oncelik===k?'on':''}" data-act="f" data-k="oncelik" data-v="${k}">${v}</button>`).join('')}</div></div>
     <div class="fld"><label class="lab" for="f-aciklama">Açıklama</label><textarea class="inp" id="f-aciklama" data-f="aciklama" placeholder="Detaylar, linkler, brief…">${esc(F.aciklama)}</textarea></div>
-    <button class="btn acc block mt" data-act="gorevKaydet" ${F.yuk?'disabled':''}>${F.id?'Kaydet':'Görevi ata'}</button>`
+    <button class="btn acc block mt" data-act="gorevKaydet" ${F.yuk?'disabled':''}>${F.id?'Kaydet':'İşi ata'}</button>`
   }
   if(SH==='detay'){
-    const g=D.gorevler[F.id];if(!g)return head('Görev')+'<p class="muted">Bu görev silinmiş.</p>';
+    const g=D.gorevler[F.id];if(!g)return head('İş')+'<p class="muted">Bu iş silinmiş.</p>';
     const benim=g.atanan===me.uid;const izin=k=>admin||(benim&&k!=='bitti');
     return head(esc(g.baslik))+`<div class="detail">${g.musteri?`<div class="row"><span>Müşteri</span><b>${esc(g.musteri)}</b></div>`:''}<div class="row"><span>Kime</span><b>${esc(g.atananAd||kisiAd(g.atanan))}</b></div><div class="row"><span>Son tarih</span><b class="${gecikti(g)?'late':''}">${gecikti(g)?'Gecikti · ':''}${tarih(g.sonTarih)}</b></div><div class="row"><span>Öncelik</span><b>${ONC[g.oncelik]||'Normal'}</b></div><div class="row"><span>Atayan</span><b>${esc(g.olusturanAd||'')}</b></div></div>
     ${g.aciklama?`<div class="desc">${linkle(g.aciklama)}</div>`:''}
     <div class="fld"><div class="lab">Durum</div><div class="steps">${DSIRA.map(k=>`<button class="${g.durum===k?'on':''}" data-act="durum" data-v="${k}" ${izin(k)?'':'disabled'}>${DURUM[k]}</button>`).join('')}</div>${!admin?'<p class="muted" style="font-size:12.5px;margin:6px 2px 0">İşi bitirince “Onay bekliyor” yapın; yönetici kontrol edip “Bitti”ye alır.</p>':''}</div>
     <div class="fld"><div class="lab">Notlar</div><div class="list">${(g.yorumlar||[]).map(c=>`<div class="cmt"><div class="h"><b>${esc(c.yazanAd)}</b><span>${zaman(c.zaman)}</span></div><p>${linkle(c.metin)}</p></div>`).join('')||'<p class="muted" style="margin:0;font-size:14px">Henüz not yok.</p>'}</div>
     <textarea class="inp mt" id="f-yorum" data-f="yorum" placeholder="Not yaz…" style="min-height:64px">${esc(F.yorum)}</textarea><button class="btn ghost block mt" data-act="yorumEkle">Notu ekle</button></div>
+    ${admin&&g.atanan!==me.uid&&waLink(g)&&g.durum!=='bitti'?`<a class="btn wa block" style="margin-top:18px" href="${esc(waLink(g))}" target="_blank" rel="noopener">WhatsApp'tan hatırlat</a>`:''}
     ${admin?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:18px"><button class="btn ghost" data-act="duzenle">Düzenle</button><button class="btn danger" data-act="sil">${F.armed?'Emin misin? Sil':'Sil'}</button></div>`:''}`
+  }
+  if(SH==='bildir'){
+    const g=D.gorevler[F.id];if(!g)return head('Haber ver')+'<p class="muted">İş yükleniyor…</p>';
+    const k=D.kullanicilar[g.atanan]||{};const l=waLink(g);
+    return head('İş atandı ✓')+`<p class="muted" style="margin:0">İşi <b style="color:var(--ink)">${esc(k.ad||'')}</b> aldı. WhatsApp'tan haber vermek ister misin?</p>
+    ${l?`<a class="btn wa block mt" href="${esc(l)}" target="_blank" rel="noopener" data-act="waKapat">WhatsApp'tan haber ver</a>`:`<div class="note">${esc(k.ad||'Bu kişi')} için WhatsApp numarası kayıtlı değil. Ekip sekmesinden ${esc(k.ad||'kişiye')} dokunup numarasını ekleyebilirsin.</div>`}
+    <button class="btn ghost block mt" data-act="kapat">Şimdi değil</button>`
   }
   if(SH==='kisi'){
     return head('Ekibe kişi ekle')+`<div class="fld"><label class="lab" for="k-ad">Ad soyad</label><input class="inp" id="k-ad" data-f="ad" value="${esc(F.ad)}"></div>
     <div class="fld"><div class="lab">Ekip</div><div class="chips" style="flex-wrap:wrap">${EKIPLER.map(e=>`<button class="chip ${F.ekip===e?'on':''}" data-act="f" data-k="ekip" data-v="${e}">${e}</button>`).join('')}</div></div>
     <div class="fld"><label class="lab" for="k-mail">Kullanıcı adı</label><input class="inp" id="k-mail" data-f="email" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="${esc(kAdi(F.ad||'')||'seda')}" value="${esc(F.email)}"></div>
+    <div class="fld"><label class="lab" for="k-tel">WhatsApp numarası</label><input class="inp" id="k-tel" data-f="tel" inputmode="tel" placeholder="05xx xxx xx xx" value="${esc(F.tel)}"></div>
     <div class="fld"><label class="lab" for="k-pw">Geçici şifre</label><input class="inp" id="k-pw" data-f="sifre" autocomplete="off" value="${esc(F.sifre)}"></div>
     ${F.hata?`<div class="err">${esc(F.hata)}</div>`:''}
     <button class="btn acc block mt" data-act="kisiKaydet" ${F.yuk?'disabled':''}>${F.yuk?'Ekleniyor…':'Hesabı aç ve ekle'}</button>`
@@ -326,9 +342,10 @@ function sheetHTML(){
   if(SH==='kisiDetay'){
     const k=D.kullanicilar[F.id];if(!k)return head('Kişi')+'';
     const g=gorevler().filter(x=>x.atanan===k.id).sort(sirala);
-    return head(esc(k.ad))+`<div class="detail"><div class="row"><span>Ekip</span><b>${esc(k.rol==='admin'?'Yönetici':k.ekip)}</b></div><div class="row"><span>Kullanıcı adı</span><b style="user-select:all">${esc(gorunur(k.email))}</b></div></div>
+    return head(esc(k.ad))+`<div class="detail"><div class="row"><span>Ekip</span><b>${esc(k.rol==='admin'?'Yönetici':k.ekip)}</b></div><div class="row"><span>Kullanıcı adı</span><b style="user-select:all">${esc(gorunur(k.email))}</b></div><div class="row"><span>WhatsApp</span><b>${k.tel?esc(telGoster(k.tel)):'<span class="muted">eklenmemiş</span>'}</b></div></div>
+    <div class="fld"><label class="lab" for="kd-tel">WhatsApp numarası</label><div style="display:flex;gap:8px"><input class="inp" id="kd-tel" data-f="tel" inputmode="tel" placeholder="05xx xxx xx xx" value="${esc(F.tel??(k.tel?'0'+k.tel.slice(2):''))}"><button class="btn ghost" data-act="telKaydet">Kaydet</button></div></div>
     ${k.rol!=='admin'?`<div class="fld"><div class="lab">Ekip değiştir</div><div class="chips" style="flex-wrap:wrap">${EKIPLER.map(e=>`<button class="chip ${k.ekip===e?'on':''}" data-act="ekipDegis" data-v="${e}">${e}</button>`).join('')}</div></div>`:''}
-    <div class="sec"><h2>Görevleri</h2><small>${g.filter(x=>x.durum!=='bitti').length} açık</small></div><div class="list">${g.map(taskRow).join('')||'<div class="empty">Görev yok</div>'}</div>
+    <div class="sec"><h2>İşleri</h2><small>${g.filter(x=>x.durum!=='bitti').length} açık</small></div><div class="list">${g.map(taskRow).join('')||'<div class="empty">İş yok</div>'}</div>
     ${k.rol!=='admin'?`<button class="btn danger block mt" data-act="kisiCikar">${F.armed?'Emin misin? Erişimini kapat':'Ekipten çıkar'}</button>`:''}`
   }
   if(SH==='profil'){
@@ -364,15 +381,16 @@ async function girisIslem(t){
   G.yuk=false;if(mode==='giris')render();
 }
 async function gorevKaydet(){
-  const baslik=(F.baslik||'').trim();if(!baslik)return toast('Görev adını yazın.');
-  if(!F.atanan)return toast('Görevi kime atayacağınızı seçin.');
+  const baslik=(F.baslik||'').trim();if(!baslik)return toast('İşin adını yazın.');
+  if(!F.atanan)return toast('İşi kime vereceğinizi seçin.');
   const k=D.kullanicilar[F.atanan];
   const veri={baslik,musteri:(F.musteri||'').trim(),aciklama:(F.aciklama||'').trim(),atanan:F.atanan,atananAd:k?k.ad:'',ekip:k?(k.rol==='admin'?'Yönetim':k.ekip):'',sonTarih:F.sonTarih||'',oncelik:F.oncelik||'normal',guncellendi:Date.now()};
-  F.yuk=true;renderSheet();
+  F.yuk=true;renderSheet();const yeniId=uid(),F_atanan=F.atanan;
   try{
     if(F.id)await fs.collection('gorevler').doc(F.id).update(veri);
-    else await fs.collection('gorevler').doc(uid()).set({...veri,durum:'yapilacak',yorumlar:[],olusturan:me.uid,olusturanAd:profil.ad,olusturma:Date.now()});
-    const yeni=!F.id;closeSheet();toast(yeni?'Görev atandı':'Görev güncellendi');
+    else await fs.collection('gorevler').doc(yeniId).set({...veri,durum:'yapilacak',yorumlar:[],olusturan:me.uid,olusturanAd:profil.ad,olusturma:Date.now()});
+    const yeni=!F.id,gid=F.id||yeniId;closeSheet();
+    if(yeni&&F_atanan!==me.uid)openSheet('bildir',{id:gid});else toast(yeni?'İş atandı':'İş güncellendi');
   }catch(e){F.yuk=false;renderSheet();toast(fbHata(e))}
 }
 async function kisiKaydet(){
@@ -384,13 +402,13 @@ async function kisiKaydet(){
   try{
     ikinci=firebase.apps.find(a=>a.name==='ekle')||firebase.initializeApp(FIREBASE_CONFIG,'ekle');
     const c=await ikinci.auth().createUserWithEmailAndPassword(email,sifre);
-    await fs.collection('kullanicilar').doc(c.user.uid).set({ad,email,ekip:F.ekip,rol:'calisan',aktif:true,olusturma:Date.now(),ekleyen:me.uid});
+    await fs.collection('kullanicilar').doc(c.user.uid).set({ad,email,tel:telNorm(F.tel),ekip:F.ekip,rol:'calisan',aktif:true,olusturma:Date.now(),ekleyen:me.uid});
     await ikinci.auth().signOut();
     closeSheet();toast(ad+' eklendi · kullanıcı adı: '+gorunur(email));
   }catch(e){
     if(e&&e.code==='auth/email-already-in-use'){
       const eski=Object.values(D.kullanicilar).find(k=>k.email===email);
-      if(eski){await fs.collection('kullanicilar').doc(eski.id).update({aktif:true,ad,ekip:F.ekip});closeSheet();toast(ad+' tekrar ekibe alındı. Eski şifresiyle girebilir.');return}
+      if(eski){await fs.collection('kullanicilar').doc(eski.id).update({aktif:true,ad,ekip:F.ekip,tel:telNorm(F.tel)});closeSheet();toast(ad+' tekrar ekibe alındı. Eski şifresiyle girebilir.');return}
     }
     F.yuk=false;F.hata=fbHata(e);renderSheet();
   }
@@ -422,6 +440,7 @@ document.addEventListener('click',async e=>{
   case 'kisi':S.kisi=v;render();break;
   case 'durumF':S.durum=v;render();break;
   case 'kapat':closeSheet();break;
+  case 'waKapat':setTimeout(closeSheet,400);break;
   case 'f':F[a.dataset.k]=v;renderSheet();break;
   case 'yeniGorev':openSheet('gorev',{oncelik:'normal',sonTarih:addDays(today(),1),atanan:(S.kisi!=='hepsi'&&S.kisi!=='ben')?S.kisi:''});break;
   case 'detay':openSheet('detay',{id:a.dataset.id});break;
@@ -433,10 +452,11 @@ document.addEventListener('click',async e=>{
     const y=[...(g.yorumlar||[]),{yazan:me.uid,yazanAd:profil.ad,metin:m,zaman:Date.now()}];F.yorum='';
     await guncelle(g.id,{yorumlar:y});break}
   case 'sil':if(!F.armed){F.armed=true;renderSheet();break}
-    try{await fs.collection('gorevler').doc(F.id).delete();closeSheet();toast('Görev silindi')}catch(e){toast(fbHata(e))}break;
+    try{await fs.collection('gorevler').doc(F.id).delete();closeSheet();toast('İş silindi')}catch(e){toast(fbHata(e))}break;
   case 'yeniKisi':openSheet('kisi',{});break;
   case 'kisiKaydet':kisiKaydet();break;
   case 'kisiDetay':openSheet('kisiDetay',{id:a.dataset.id});break;
+  case 'telKaydet':{const t=telNorm(F.tel);if(F.tel&&!t){toast('Numara hatalı görünüyor.');break}try{await fs.collection('kullanicilar').doc(F.id).update({tel:t});F.tel=undefined;toast('Numara kaydedildi')}catch(e){toast(fbHata(e))}break}
   case 'ekipDegis':try{await fs.collection('kullanicilar').doc(F.id).update({ekip:v})}catch(e){toast(fbHata(e))}break;
   case 'kisiCikar':if(!F.armed){F.armed=true;renderSheet();break}
     try{await fs.collection('kullanicilar').doc(F.id).update({aktif:false});closeSheet();toast('Erişimi kapatıldı')}catch(e){toast(fbHata(e))}break;
